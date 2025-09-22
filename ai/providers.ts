@@ -1,12 +1,10 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import { createGroq } from "@ai-sdk/groq";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { createXai } from "@ai-sdk/xai";
 
-import { 
-  customProvider, 
-  wrapLanguageModel, 
-  extractReasoningMiddleware 
+import {
+  customProvider,
+  wrapLanguageModel,
+  extractReasoningMiddleware
 } from "ai";
 
 export interface ModelInfo {
@@ -27,23 +25,14 @@ const getApiKey = (key: string): string | undefined => {
   if (process.env[key]) {
     return process.env[key] || undefined;
   }
-  
+
   // Fall back to localStorage if available
   if (typeof window !== 'undefined') {
     return window.localStorage.getItem(key) || undefined;
   }
-  
+
   return undefined;
 };
-
-// Create provider instances with API keys from localStorage
-const openaiClient = createOpenAI({
-  apiKey: getApiKey('OPENAI_API_KEY'),
-});
-
-const anthropicClient = createAnthropic({
-  apiKey: getApiKey('ANTHROPIC_API_KEY'),
-});
 
 const groqClient = createGroq({
   apiKey: getApiKey('GROQ_API_KEY'),
@@ -54,37 +43,30 @@ const xaiClient = createXai({
 });
 
 const languageModels = {
-  "gpt-4.1-mini": openaiClient("gpt-4.1-mini"),
-  "claude-3-7-sonnet": anthropicClient('claude-3-7-sonnet-20250219'),
-  "qwen-qwq": wrapLanguageModel(
+  "qwen3-32b": wrapLanguageModel(
     {
-      model: groqClient("qwen-qwq-32b"),
+      model: groqClient('qwen/qwen3-32b'),
       middleware
     }
   ),
   "grok-3-mini": xaiClient("grok-3-mini-latest"),
+  "kimi-k2": groqClient('moonshotai/kimi-k2-instruct'),
+  "llama4": groqClient('meta-llama/llama-4-scout-17b-16e-instruct')
 };
 
 export const modelDetails: Record<keyof typeof languageModels, ModelInfo> = {
-  "gpt-4.1-mini": {
-    provider: "OpenAI",
-    name: "GPT-4.1 Mini",
-    description: "Compact version of OpenAI's GPT-4.1 with good balance of capabilities, including vision.",
-    apiVersion: "gpt-4.1-mini",
-    capabilities: ["Balance", "Creative", "Vision"]
-  },
-  "claude-3-7-sonnet": {
-    provider: "Anthropic",
-    name: "Claude 3.7 Sonnet",
-    description: "Latest version of Anthropic's Claude 3.7 Sonnet with strong reasoning and coding capabilities.",
-    apiVersion: "claude-3-7-sonnet-20250219",
-    capabilities: ["Reasoning", "Efficient", "Agentic"]
-  },
-  "qwen-qwq": {
+  "kimi-k2": {
     provider: "Groq",
-    name: "Qwen QWQ",
-    description: "Latest version of Alibaba's Qwen QWQ with strong reasoning and coding capabilities.",
-    apiVersion: "qwen-qwq",
+    name: "Kimi K2",
+    description: "Latest version of Moonshot AI's Kimi K2 with good balance of capabilities.",
+    apiVersion: "kimi-k2-instruct",
+    capabilities: ["Balanced", "Efficient", "Agentic"]
+  },
+  "qwen3-32b": {
+    provider: "Groq",
+    name: "Qwen 3 32B",
+    description: "Latest version of Alibaba's Qwen 32B with strong reasoning and coding capabilities.",
+    apiVersion: "qwen3-32b",
     capabilities: ["Reasoning", "Efficient", "Agentic"]
   },
   "grok-3-mini": {
@@ -94,6 +76,13 @@ export const modelDetails: Record<keyof typeof languageModels, ModelInfo> = {
     apiVersion: "grok-3-mini-latest",
     capabilities: ["Reasoning", "Efficient", "Agentic"]
   },
+  "llama4": {
+    provider: "Groq",
+    name: "Llama 4",
+    description: "Latest version of Meta's Llama 4 with good balance of capabilities.",
+    apiVersion: "llama-4-scout-17b-16e-instruct",
+    capabilities: ["Balanced", "Efficient", "Agentic"]
+  }
 };
 
 // Update API keys when localStorage changes (for runtime updates)
@@ -114,4 +103,4 @@ export type modelID = keyof typeof languageModels;
 
 export const MODELS = Object.keys(languageModels);
 
-export const defaultModel: modelID = "qwen-qwq";
+export const defaultModel: modelID = "kimi-k2";

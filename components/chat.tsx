@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
 import { getUserId } from "@/lib/user-id";
 import { useLocalStorage } from "@/lib/hooks/use-local-storage";
-import { STORAGE_KEYS } from "@/lib/constants";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { convertToUIMessages } from "@/lib/chat-store";
 import { type Message as DBMessage } from "@/lib/db/schema";
@@ -51,36 +50,41 @@ export default function Chat() {
   }, [chatId]);
   
   // Use React Query to fetch chat history
-  const { data: chatData, isLoading: isLoadingChat } = useQuery({
+  const { data: chatData, isLoading: isLoadingChat, error } = useQuery({
     queryKey: ['chat', chatId, userId] as const,
     queryFn: async ({ queryKey }) => {
       const [_, chatId, userId] = queryKey;
       if (!chatId || !userId) return null;
       
-      try {
-        const response = await fetch(`/api/chats/${chatId}`, {
-          headers: {
-            'x-user-id': userId
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to load chat');
+      const response = await fetch(`/api/chats/${chatId}`, {
+        headers: {
+          'x-user-id': userId
         }
-        
-        const data = await response.json();
-        return data as ChatData;
-      } catch (error) {
-        console.error('Error loading chat history:', error);
-        toast.error('Failed to load chat history');
-        throw error;
+      });
+      
+      if (!response.ok) {
+        // For 404, return empty chat data instead of throwing
+        if (response.status === 404) {
+          return { id: chatId, messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        }
+        throw new Error('Failed to load chat');
       }
+      
+      return response.json() as Promise<ChatData>;
     },
     enabled: !!chatId && !!userId,
     retry: 1,
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false
   });
+  
+  // Handle query errors
+  useEffect(() => {
+    if (error) {
+      console.error('Error loading chat history:', error);
+      toast.error('Failed to load chat history');
+    }
+  }, [error]);
   
   // Prepare initial messages from query data
   const initialMessages = useMemo(() => {
@@ -109,7 +113,7 @@ export default function Chat() {
         chatId: chatId || generatedChatId, // Use generated ID if no chatId in URL
         userId,
       },
-      experimental_throttle: 500,
+      experimental_throttle: 100,
       onFinish: () => {
         // Invalidate the chats query to refresh the sidebar
         if (userId) {
@@ -148,7 +152,7 @@ export default function Chat() {
   const isLoading = status === "streaming" || status === "submitted" || isLoadingChat;
 
   return (
-    <div className="h-dvh flex flex-col justify-center w-full max-w-3xl mx-auto px-4 sm:px-6 md:py-4">
+    <div className="h-dvh flex flex-col justify-center w-full max-w-[430px] sm:max-w-3xl mx-auto px-4 sm:px-6 py-3">
       {messages.length === 0 && !isLoadingChat ? (
         <div className="max-w-xl mx-auto w-full">
           <ProjectOverview />
@@ -174,7 +178,7 @@ export default function Chat() {
           </div>
           <form
             onSubmit={handleFormSubmit}
-            className="mt-2 w-full mx-auto mb-4 sm:mb-auto"
+            className="mt-2 w-full mx-auto"
           >
             <Textarea
               selectedModel={selectedModel}

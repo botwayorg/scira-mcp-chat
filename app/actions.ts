@@ -1,5 +1,6 @@
 "use server";
 
+import { groq } from "@ai-sdk/groq";
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
@@ -13,54 +14,55 @@ function getMessageText(message: any): string {
       return textParts.map((p: any) => p.text).join('\n');
     }
   }
-  
+
   // Fallback to content (old format)
   if (typeof message.content === 'string') {
     return message.content;
   }
-  
+
   // If content is an array (potentially of parts), try to extract text
   if (Array.isArray(message.content)) {
-    const textItems = message.content.filter((item: any) => 
+    const textItems = message.content.filter((item: any) =>
       typeof item === 'string' || (item.type === 'text' && item.text)
     );
-    
+
     if (textItems.length > 0) {
-      return textItems.map((item: any) => 
+      return textItems.map((item: any) =>
         typeof item === 'string' ? item : item.text
       ).join('\n');
     }
   }
-  
+
   return '';
 }
 
-export async function generateTitle(messages: any[]) {
-  // Convert messages to a format that OpenAI can understand
-  const normalizedMessages = messages.map(msg => ({
-    role: msg.role,
-    content: getMessageText(msg)
-  }));
-  
-  const { object } = await generateObject({
-    model: openai("gpt-4.1"),
-    schema: z.object({
-      title: z.string().min(1).max(100),
-    }),
-    system: `
-    You are a helpful assistant that generates titles for chat conversations.
-    The title should be a short description of the conversation.
-    The title should be no more than 30 characters.
-    The title should be unique and not generic.
-    `,
-    messages: [
-      ...normalizedMessages,
-      {
-        role: "user",
-        content: "Generate a title for the conversation.",
-      },
-    ],
-  });
+export async function generateTitle(messages: any[]): Promise<string> {
+  try {
+    // Find the first user message and use it for title generation
+    const userMessage = messages.find(m => m.role === 'user');
 
-  return object.title;
+    if (!userMessage) {
+      return 'New Chat';
+    }
+
+    // Extract text content from the message
+    const messageText = getMessageText(userMessage);
+
+    if (!messageText.trim()) {
+      return 'New Chat';
+    }
+
+    const { object: titleObject } = await generateObject({
+      model: groq('llama-3.1-8b-instant'),
+      schema: z.object({
+        title: z.string().describe("A short, descriptive title for the conversation"),
+      }),
+      prompt: `Generate a concise title (max 6 words) for a conversation that starts with: "${messageText.slice(0, 200)}"`,
+    });
+
+    return titleObject.title || 'New Chat';
+  } catch (error) {
+    console.error('Error generating title:', error);
+    return 'New Chat';
+  }
 }
